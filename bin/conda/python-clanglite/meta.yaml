@@ -17,15 +17,12 @@ requirements:
   build:
     - libtoolchain
     - python
-    - libboost
+    - libboost_python-dev
     - python-toolchain
-    - clang
-    - libclanglite
+    - libclanglite 3.8.1
   run:
     - python
-    - clang
-    - libclanglite
-    - libboost
+    - libclanglite 3.8.1
 
 test:                                     
   commands:                               

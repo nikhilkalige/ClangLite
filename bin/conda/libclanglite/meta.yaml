@@ -18,10 +18,8 @@ requirements:
     - python
     - libtoolchain 
     - python-toolchain
-    - clang
-    - libboost
+    - clang 3.8.1
+    - libboost_python-dev
   run:
-    - libruntime
     - python
-    - clang
-    - libboost
+    - clang 3.8.1
