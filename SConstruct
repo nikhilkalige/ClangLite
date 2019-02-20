@@ -26,19 +26,29 @@
 import os
 from SCons import Errors
 
-if not 'PREFIX' in os.environ:
-  os.environ['PREFIX'] = os.environ['CONDA_PREFIX']
+#if not 'PREFIX' in os.environ:
+#  os.environ['PREFIX'] = os.environ['CONDA_PREFIX']
   
 env = Environment(tools = ['system',
                            'toolchain',
-                           'pybind11'])
+                           'pybind11'], toolpath=['/home/lonewolf/softwares/clanglite/toolchain-tools/etc/conda/scons-tools/'])
 
 SYSTEM = env['SYSTEM']
 
 if not SYSTEM == 'win':
-	env.AppendUnique(CXXFLAGS=['-ffunction-sections',
+#env.AppendUnique(CXXFLAGS=['-ffunction-sections',
+	env.Append(CXXFLAGS=['-ffunction-sections',
 		                       '-fdata-sections',
-		                       '-Wno-deprecated-declarations'])
+		                       '-Wno-deprecated-declarations',
+                            '-I', '/home/lonewolf/softwares/clanglite/pybind11/include/',
+'-I', '/usr/include/python3.5m/',
+'-I', '/home/lonewolf/softwares/clanglite/llvm-project/build/tools/clang/include/',
+'-I', '/home/lonewolf/softwares/clanglite/llvm-project/clang/include/',
+'-I', '/home/lonewolf/softwares/clanglite/llvm-headers/llvm-8/',
+'-I', '/home/lonewolf/softwares/clanglite/llvm-headers/llvm-c-8/',
+'-I', '../../'
+#'-I', '/home/lonewolf/softwares/clanglite/llvm/include/',
+  ])
 else:
    env.AppendUnique(CPPDEFINES = ['_WINDOWS', 'NDEBUG',
                                   '_HAS_EXCEPTIONS=0',
@@ -155,7 +165,7 @@ else:
     env.AppendUnique(LIBS=["version.lib"])
 
 VariantDir('build', 'src')
-SConscript(os.path.join('build', 'cpp', 'SConscript'), exports="env")
+#SConscript(os.path.join('build', 'cpp', 'SConscript'), exports="env")
 SConscript(os.path.join('build', 'py', 'SConscript'), exports="env")
 
 Default("install")

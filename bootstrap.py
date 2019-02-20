@@ -26,6 +26,7 @@ import platform
 import uuid
 import sys
 import autowig
+import pudb
 
 is_windows = any(platform.win32_ver())
 if is_windows:
@@ -35,13 +36,15 @@ CONDA_ENVIRONMENT = "env_" + str(uuid.uuid4())
 PYTHON_VERSION = str(sys.version_info.major) + '.' + str(sys.version_info.minor)
 
 def clanglite_controller(asg):
-    
-    BOOST_PYTHON = autowig.generator.plugin.startswith('boost_python')
+
+    #pudb.set_trace()
+    #BOOST_PYTHON = autowig.generator.plugin.startswith('boost_python')
     PYBIND11 = autowig.generator.plugin.startswith('pybind11')
+    BOOST_PYTHON = False
 
     LIBCLANG = autowig.parser.plugin == 'libclang'
     CLANGLITE = autowig.parser.plugin == 'clanglite'
-            
+
     from autowig.default_controller import refactoring
     asg = refactoring(asg)
 
@@ -62,8 +65,8 @@ def clanglite_controller(asg):
         for node in asg['::boost::python'].classes(nested = True):
             node.is_copyable = True
         asg['class ::boost::python::api::object'].boost_python_export = True
-        asg['class ::boost::python::list'].boost_python_export = True 
-        asg['class ::boost::python::str'].boost_python_export = True 
+        asg['class ::boost::python::list'].boost_python_export = True
+        asg['class ::boost::python::str'].boost_python_export = True
 
     if PYBIND11:
         for node in asg.classes():
@@ -100,7 +103,7 @@ def clanglite_controller(asg):
                     '::clang::NonTypeTemplateParmDecl', '::clang::TemplateArgumentList', '::clang::ImportDecl',
                     '::clang::TemplateTemplateParmDecl']:
             asg['class ' + cls].is_abstract = False
-        
+
     subset = []
     classes = [asg['class ::clang::QualType'],
                asg['class ::clang::Type'],
@@ -156,7 +159,7 @@ def clanglite_controller(asg):
     if PYBIND11:
         for node in subset:
             node.pybind11_export = True
-        
+
     for fct in asg['::clanglite'].functions():
         if not fct.localname == 'build_ast_from_code_with_args':
             fct.parent = fct.parameters[0].qualified_type.desugared_type.unqualified_type
@@ -164,7 +167,7 @@ def clanglite_controller(asg):
             fct.boost_python_export = True
         if PYBIND11:
             fct.pybind11_export = True
-        
+
     for mtd in asg['class ::clang::ASTContext'].methods(pattern='.*getSourceManager.*'):
         if mtd.return_type.globalname == 'class ::clang::SourceManager &':
                 if BOOST_PYTHON:
@@ -172,7 +175,7 @@ def clanglite_controller(asg):
                 if PYBIND11:
                     mtd.pybind11_export = True
                 break
-                
+
     if LIBCLANG and BOOST_PYTHON:
         for node in (asg.functions(pattern='.*(llvm|clang).*_(begin|end)')
                      + asg.functions(pattern='::clang::CXXRecordDecl::getCaptureFields')
@@ -192,24 +195,24 @@ def clanglite_controller(asg):
                      + asg.nodes('::clang::SourceLocation::printToString')
                      + asg['class ::llvm::StringRef'].methods()):
             node.boost_python_export = False
-            
+
     if CLANGLITE and BOOST_PYTHON:
         for mtd in asg['class ::clang::Decl'].methods():
             if mtd.localname == 'hasAttr':
                 mtd.boost_python_export = False
-                
+
     if BOOST_PYTHON:
         if 'class ::clang::ConstructorUsingShadowDecl' in asg:
             for mtd in asg["class ::clang::ConstructorUsingShadowDecl"].methods():
                 if mtd.localname in ['getConstructor', 'setConstructor']:
                     mtd.boost_python_export = False
-                
+
     import sys
     try:
         from path import path as Path
     except:
         from path import Path
-       
+
     import platform
     if any(platform.win32_ver()):
         for header in (Path(sys.prefix)/'Library'/'include'/'clang').walkfiles('*.h'):
@@ -217,85 +220,96 @@ def clanglite_controller(asg):
     else:
         for header in (Path(sys.prefix)/'include'/'clang').walkfiles('*.h'):
             asg[header.abspath()].is_external_dependency = False
-    
+
     return asg
 
 VERSION_CHANGE=False
 
-if not os.system("conda create -n " + CONDA_ENVIRONMENT + " python=" + PYTHON_VERSION + " statiskit-toolchain -y -c statiskit --use-local"):
-    try:
+if not os.system("conda create -n " + CONDA_ENVIRONMENT + " python=" + PYTHON_VERSION ):#+ " statiskit-toolchain -y -c statiskit --use-local"):
+#    try:
         CONDA_PREFIX = os.path.abspath(os.environ['CONDA_PREFIX'])
-        if os.path.abspath(CONDA_PREFIX + '/..').endswith('envs'):
-            CONDA_PREFIX = os.path.abspath(os.environ['CONDA_PREFIX'] + '/..')
-        else:
-            CONDA_PREFIX = os.path.abspath(os.environ['CONDA_PREFIX'] + '/envs')
+        #if os.path.abspath(CONDA_PREFIX + '/..').endswith('envs'):
+        #    CONDA_PREFIX = os.path.abspath(os.environ['CONDA_PREFIX'] + '/..')
+        #else:
+        #    CONDA_PREFIX = os.path.abspath(os.environ['CONDA_PREFIX'] + '/envs')
         CONDA_PREFIX = os.path.join(CONDA_PREFIX, CONDA_ENVIRONMENT)
-        if VERSION_CHANGE:
-            if os.system("conda build etc/conda/llvm"):
-                raise OSError("Build of the llvm recipe failed !")
-            if os.system("conda install -n " + CONDA_ENVIRONMENT + " llvm --use-local -y"):
-                raise OSError("Install of llvm failed !")
-        else:
-            if os.system("conda install -n " + CONDA_ENVIRONMENT + " llvm -c statiskit -y"):
-                raise OSError("Install of llvm failed !")            
-        if VERSION_CHANGE:
-            if os.system("conda build etc/conda/clang"):
-                raise OSError("Build of the clang recipe failed !")
-            if os.system("conda install -n " + CONDA_ENVIRONMENT + " clang --use-local -y"):
-                raise OSError("Install of clang failed !")
-        else:
-            if os.system("conda install -n " + CONDA_ENVIRONMENT + " clang -c statiskit -y"):
-                raise OSError("Install of clang failed !")    
-        # if VERSION_CHANGE:
+        #if VERSION_CHANGE:
+        #    if os.system("conda build etc/conda/llvm"):
+        #        raise OSError("Build of the llvm recipe failed !")
+        #    if os.system("conda install -n " + CONDA_ENVIRONMENT + " llvm --use-local -y"):
+        #        raise OSError("Install of llvm failed !")
+        #else:
+        #    if os.system("conda install -n " + CONDA_ENVIRONMENT + " llvm -c statiskit -y"):
+        #        raise OSError("Install of llvm failed !")
+        #if VERSION_CHANGE:
+        #    if os.system("conda build etc/conda/clang"):
+        #        raise OSError("Build of the clang recipe failed !")
+        #    if os.system("conda install -n " + CONDA_ENVIRONMENT + " clang --use-local -y"):
+        #        raise OSError("Install of clang failed !")
+        #else:
+        #    if os.system("conda install -n " + CONDA_ENVIRONMENT + " clang -c statiskit -y"):
+        #        raise OSError("Install of clang failed !")
+        ## if VERSION_CHANGE:
         #     if os.system("conda build etc/conda/python-clang"):
         #         raise OSError("Build of the python-clang recipe failed !")
         #     if os.system("conda install -n " + CONDA_ENVIRONMENT + " python-clang --use-local -y"):
         #         raise OSError("Install of python-clang failed !")
         # else:
         #     if os.system("conda install -n " + CONDA_ENVIRONMENT + " python-clang -c statiskit -y"):
-        #         raise OSError("Install of python-clang failed !")    
-        if os.system("conda build etc/conda/libclanglite -c statiskit"):
-            raise OSError("Build of the libclanglite recipe failed !")
-        if os.system("conda install -n " + CONDA_ENVIRONMENT + " libclanglite --use-local -c statiskit -y"):
-            raise OSError("Install of libclanglite failed !")
+        #         raise OSError("Install of python-clang failed !")
+        #if os.system("conda build etc/conda/libclanglite -c statiskit"):
+            #raise OSError("Build of the libclanglite recipe failed !")
+        #if os.system("conda install -n " + CONDA_ENVIRONMENT + " libclanglite --use-local -c statiskit -y"):
+            #raise OSError("Install of libclanglite failed !")
 
-        os.system("rm src/py/*.cpp")
-        os.system("rm src/py/*.h")
-        os.system("rm src/py/clanglite/_clanglite.py")
+        #os.system("rm src/py/*.cpp")
+        #os.system("rm src/py/*.h")
+        #os.system("rm src/py/clanglite/_clanglite.py")
 
         headers = [CONDA_PREFIX + '/include/clanglite/tool.h']
-            
+        headers = ['/clang/clanglite/src/cpp/tool.h']
+
         flags = ['-x', 'c++', '-std=c++11',
                  '-D__STDC_LIMIT_MACROS',
                  '-D__STDC_CONSTANT_MACROS',
-                 '-I' + CONDA_PREFIX + '/include']
-    
+                 '-I' + CONDA_PREFIX + '/include',
+                 '-I/clang/llvm-project/build/tools/clang/include/',
+                 '-I/clang/llvm-project/clang/include/',
+                 '-I/clang/llvm-headers/llvm-8',
+                 '-I/clang/llvm-headers/llvm-c-8',
+                ]
+
         if PYTHON_VERSION == '2.7':
               flags += ['-I' + CONDA_PREFIX + '/include/python' + PYTHON_VERSION]
         elif PYTHON_VERSION in ['3.6', '3.7']:
               flags += ['-I' + CONDA_PREFIX + '/include/python' + PYTHON_VERSION + 'm']
         else:
             raise ValueError("Include path for python " + PYTHON_VERSION + " unknown")
-
         _CONDA_PREFIX = os.environ['CONDA_PREFIX']
         os.environ['CONDA_PREFIX'] = CONDA_PREFIX
+        # import pudb;pudb.set_trace()
         asg = autowig.AbstractSemanticGraph()
+        print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", headers)
         asg = autowig.parser(asg,
                              headers,
                              flags = flags,
                              bootstrap = False)
-
         autowig.controller['clanglite'] = clanglite_controller
         autowig.controller.plugin = 'clanglite'
+        print("contrxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+        #import pudb;pudb.set_trace()
         asg = autowig.controller(asg)
 
-        autowig.generator.plugin = 'boost_python_pattern'
+        #autowig.generator.plugin = 'boost_python_pattern'
         autowig.generator.plugin = 'pybind11_pattern'
+        print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
         wrappers = autowig.generator(asg,
                                      module = 'src/py/_clanglite.cpp',
                                      decorator = 'src/py/clanglite/_clanglite.py',
                                      closure = False)
+        print("before xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
         wrappers.write()
+        print("wirte xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
 
         os.environ['CONDA_PREFIX'] = _CONDA_PREFIX
         if os.system("conda build bin/conda/python-clanglite -c statiskit"):
@@ -303,7 +317,7 @@ if not os.system("conda create -n " + CONDA_ENVIRONMENT + " python=" + PYTHON_VE
         if os.system("conda install -n " + CONDA_ENVIRONMENT + " python-clanglite --use-local -c statiskit -y"):
             raise OSError("Install of python-clanglite failed !")
 
-    except Exception as error:
-        print(error)
-    finally:
-        os.system("conda env remove -n " + CONDA_ENVIRONMENT + " -y")
+    #except Exception as error:
+    #print(error)
+    #finally:
+    #pas
